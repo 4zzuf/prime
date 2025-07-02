@@ -19,6 +19,7 @@ from Precios import (
     potencia_maxima_demanda,
     calcular_kit,
     seleccionar_cargas_gui,
+
 )
 
 COSTO_RED = 0.83  # PEN por kWh
