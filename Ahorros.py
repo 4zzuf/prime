@@ -15,20 +15,21 @@ from Precios import (
     leer_cargas,
     curva_irradiacion_cusco,
     calcular_necesidades,
+
+    energia_dia_noche,
+
     calcular_presupuestos,
 )
 
 COSTO_RED = 0.83  # PEN por kWh
 VIDA_UTIL_ANIOS = 20
 
+def energia_diaria_kwh(cargas: list[dict[str, float]], curva: Dict[int, float]) -> float:
+    """Suma el consumo diario en kWh a partir de los intervalos."""
 
-def energia_diaria_kwh(cargas: list[dict[str, float]]) -> float:
-    """Suma el consumo diario en kWh."""
+    energia_dia, energia_noche = energia_dia_noche(cargas, curva)
+    return (energia_dia + energia_noche) / 1000
 
-    total_wh = sum(
-        c["carga"] * c["cantidad"] * (c["uso_am"] + c["uso_pm"]) for c in cargas
-    )
-    return total_wh / 1000
 
 
 def calcular_amortizacion(
@@ -72,7 +73,55 @@ def graficar_costo_acumulado(costo_sistema: float, daily_kwh: float, nombre: str
     plt.savefig(f"costo_{nombre}.png")
     plt.close()
 
+def graficar_costo_anual(costo_sistema: float, daily_kwh: float, nombre: str) -> None:
+    """Grafica el costo anual de red vs el costo anual amortizado del kit."""
 
+    try:
+        import matplotlib.pyplot as plt
+    except Exception as exc:  # pragma: no cover - si matplotlib no esta
+        raise ImportError("matplotlib no esta instalado") from exc
+
+    anios = list(range(1, VIDA_UTIL_ANIOS + 1))
+    costo_red = [daily_kwh * COSTO_RED * 365 for _ in anios]
+    costo_solar = [costo_sistema / VIDA_UTIL_ANIOS for _ in anios]
+
+    plt.figure()
+    plt.plot(anios, costo_red, label="Red electrica")
+    plt.plot(anios, costo_solar, label="Sistema solar (amortizado)")
+    plt.xlabel("Años")
+    plt.ylabel("PEN por año")
+    plt.title(f"Costo anual - {nombre}")
+    plt.legend()
+    plt.grid(True)
+    plt.tight_layout()
+    plt.savefig(f"costo_anual_{nombre}.png")
+    plt.close()
+
+
+def graficar_ahorro_largo_plazo(costo_sistema: float, daily_kwh: float, nombre: str) -> None:
+    """Grafica el ahorro acumulado durante 10 años."""
+
+    try:
+        import matplotlib.pyplot as plt
+    except Exception as exc:  # pragma: no cover - si matplotlib no esta
+        raise ImportError("matplotlib no esta instalado") from exc
+
+    anios = list(range(1, 11))
+    costo_red = [daily_kwh * COSTO_RED * 365 * a for a in anios]
+    costo_solar = [(costo_sistema / VIDA_UTIL_ANIOS) * a for a in anios]
+    ahorro = [cr - cs for cr, cs in zip(costo_red, costo_solar)]
+
+    plt.figure()
+    plt.plot(anios, ahorro, label="Ahorro acumulado")
+    plt.xlabel("Años")
+    plt.ylabel("PEN")
+    plt.title(f"Ahorro a largo plazo - {nombre}")
+    plt.legend()
+    plt.grid(True)
+    plt.tight_layout()
+    plt.savefig(f"ahorro_{nombre}.png")
+    plt.close()
+    
 def main() -> None:
     if not os.path.exists(FILE):
         crear_excel_de_ejemplo(FILE)
@@ -88,7 +137,8 @@ def main() -> None:
     potencia_panel, capacidad_bateria = calcular_necesidades(cargas, curva)
     presupuestos = calcular_presupuestos(datos)
 
-    daily_kwh = energia_diaria_kwh(cargas)
+    daily_kwh = energia_diaria_kwh(cargas, curva)
+
     print(f"Consumo diario: {daily_kwh:.2f} kWh")
     print(f"Potencia de panel requerida: {potencia_panel:.2f} W")
     print(f"Capacidad de batería requerida: {capacidad_bateria:.2f} Ah")
@@ -103,7 +153,13 @@ def main() -> None:
         print(f"  Ahorro estimado a {VIDA_UTIL_ANIOS} años: {ahorro:.2f} PEN")
         try:
             graficar_costo_acumulado(costo, daily_kwh, categoria)
-            print(f"  Grafico guardado: costo_{categoria}.png")
+
+            graficar_costo_anual(costo, daily_kwh, categoria)
+            graficar_ahorro_largo_plazo(costo, daily_kwh, categoria)
+            print(
+                f"  Graficos guardados: costo_{categoria}.png, costo_anual_{categoria}.png, ahorro_{categoria}.png"
+            )
+
         except ImportError as exc:
             print(f"  No se pudo generar grafico: {exc}")
 
