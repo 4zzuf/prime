@@ -17,6 +17,8 @@ FILE = "equipos.xlsx"
 LOADS_FILE = "cargas.xlsx"
 SHEETS = ["Paneles", "Inversores", "Baterias", "Controladores"]
 CATEGORIES = ["Barato", "Intermedio", "Premium"]
+INVENTARIO_FILE = "inventarioESPCusco.xlsx"
+INGRESOS_FILE = "IngresosYEgresosCusco.xlsx"
 
 
 def crear_excel_de_ejemplo(filename: str) -> None:
@@ -216,6 +218,83 @@ def leer_cargas(filename: str) -> List[Dict[str, float]]:
             }
         )
     return cargas
+
+
+def crear_excel_inventario(filename: str) -> None:
+    """Crea un excel de inventario con cabeceras."""
+
+    if Workbook is None:
+        raise ImportError("openpyxl no esta instalado")
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Inventario"
+    ws.append(["Producto", "Cantidad"])
+    wb.save(filename)
+
+
+def leer_inventario(filename: str) -> Dict[str, float]:
+    """Devuelve un diccionario producto -> cantidad."""
+
+    if load_workbook is None:
+        raise ImportError("openpyxl no esta instalado")
+
+    wb = load_workbook(filename)
+    ws = wb.active
+    invent: Dict[str, float] = {}
+    for fila in ws.iter_rows(min_row=2, values_only=True):
+        if not fila:
+            continue
+        prod, cant = fila[:2]
+        invent[str(prod)] = float(cant or 0)
+    return invent
+
+
+def guardar_inventario(filename: str, invent: Dict[str, float]) -> None:
+    """Guarda las cantidades de inventario."""
+
+    if load_workbook is None:
+        raise ImportError("openpyxl no esta instalado")
+
+    wb = load_workbook(filename)
+    ws = wb.active
+    existentes = {row[0].value: row[1] for row in ws.iter_rows(min_row=2)}
+    for prod, cant in invent.items():
+        if prod in existentes:
+            existentes[prod].value = cant
+        else:
+            ws.append([prod, cant])
+    wb.save(filename)
+
+
+def crear_excel_ingresos(filename: str) -> None:
+    """Crea el archivo de ingresos y egresos."""
+
+    if Workbook is None:
+        raise ImportError("openpyxl no esta instalado")
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Movimientos"
+    ws.append(["Fecha", "Concepto", "Monto"])
+    wb.save(filename)
+
+
+def registrar_movimiento(filename: str, concepto: str, monto: float) -> None:
+    """Añade un ingreso o gasto al excel."""
+
+    if load_workbook is None:
+        raise ImportError("openpyxl no esta instalado")
+
+    from datetime import datetime
+
+    if not os.path.exists(filename):
+        crear_excel_ingresos(filename)
+
+    wb = load_workbook(filename)
+    ws = wb.active
+    ws.append([datetime.now().strftime("%Y-%m-%d"), concepto, float(monto)])
+    wb.save(filename)
 
 
 def seleccionar_cargas_gui(cargas: List[Dict[str, float]]) -> List[Dict[str, float]]:

@@ -3,23 +3,30 @@
 from __future__ import annotations
 
 import os
+import re
 from typing import Dict, Tuple
 
 from Precios import (
     FILE,
     LOADS_FILE,
     CATEGORIES,
+    INVENTARIO_FILE,
+    INGRESOS_FILE,
     crear_excel_de_ejemplo,
     crear_excel_cargas_de_ejemplo,
+    crear_excel_inventario,
+    crear_excel_ingresos,
     leer_datos,
     leer_cargas,
+    leer_inventario,
+    guardar_inventario,
+    registrar_movimiento,
     curva_irradiacion_cusco,
     calcular_necesidades,
     energia_dia_noche,
     potencia_maxima_demanda,
     calcular_kit,
     seleccionar_cargas_gui,
-
 )
 
 COSTO_RED = 0.83  # PEN por kWh
@@ -134,8 +141,14 @@ def main() -> None:
         crear_excel_cargas_de_ejemplo(LOADS_FILE)
         print(f"Se creó el archivo '{LOADS_FILE}' con datos de ejemplo.")
 
+    if not os.path.exists(INVENTARIO_FILE):
+        crear_excel_inventario(INVENTARIO_FILE)
+    if not os.path.exists(INGRESOS_FILE):
+        crear_excel_ingresos(INGRESOS_FILE)
+
     datos = leer_datos(FILE)
     cargas_base = leer_cargas(LOADS_FILE)
+    inventario = leer_inventario(INVENTARIO_FILE)
 
     try:
         from PyQt5 import QtCore, QtGui, QtWidgets
@@ -146,13 +159,13 @@ def main() -> None:
     app = QtWidgets.QApplication([])
     ventana = QtWidgets.QWidget()
     ventana.setWindowTitle("Simulador Solar")
-
     layout_principal = QtWidgets.QHBoxLayout(ventana)
 
     headers = ["Usar", "Aparato", "Cantidad", "Carga(W)", "HorasDia", "HorasNoche"]
     tabla = QtWidgets.QTableWidget(len(cargas_base), len(headers))
     tabla.setHorizontalHeaderLabels(headers)
-    ventana.resize(1100, 700)
+    tabla.setStyleSheet("background-color:#e8f4ff;")
+    ventana.resize(1300, 800)
     for fila, carga in enumerate(cargas_base):
         chk = QtWidgets.QTableWidgetItem()
         chk.setCheckState(QtCore.Qt.Checked)
@@ -178,17 +191,31 @@ def main() -> None:
     btn_anual = QtWidgets.QPushButton("Costo anual")
     btn_ahorro = QtWidgets.QPushButton("Ahorro")
     btn_sistemas = QtWidgets.QPushButton("Sistemas")
+    btn_inventario = QtWidgets.QPushButton("Inventario")
+    btn_movimientos = QtWidgets.QPushButton("Ingresos/Egresos")
     for b in (btn_costo, btn_anual, btn_ahorro, btn_sistemas):
         b.setEnabled(False)
+        layout_der.addWidget(b)
+    for b in (btn_inventario, btn_movimientos):
+        b.setEnabled(True)
         layout_der.addWidget(b)
 
     salida = QtWidgets.QTextEdit()
     salida.setReadOnly(True)
+    salida.setStyleSheet("background-color:#fff9e6;")
     layout_der.addWidget(salida)
 
     layout_der.addStretch(1)
     layout_principal.addLayout(layout_der)
-
+    def parse_item(desc: str) -> Tuple[str, int]:
+        m = re.match(r"(\d+)\s*x\s*([^()]+)", desc)
+        if m:
+            qty = int(m.group(1))
+            name = m.group(2).strip()
+        else:
+            qty = 1
+            name = desc.split("(")[0].strip()
+        return name, qty
     def toggle_checks() -> None:
         """Marca o desmarca todas las cargas."""
         any_unchecked = any(
@@ -202,9 +229,98 @@ def main() -> None:
     resultados: Dict[str, Dict[str, Tuple[str, float]]] = {}
     daily_kwh: float = 0.0
 
+    def vender_sistema(cat: str, con_igv: bool) -> None:
+        pres = resultados.get(cat)
+        if not pres:
+            return
+        total = sum(p for _, p in pres.values())
+        concepto = f"Venta {cat} {'con' if con_igv else 'sin'} IGV"
+        if con_igv:
+            total *= 1.18
+        faltantes = []
+        for desc, _ in pres.values():
+            nombre, cant = parse_item(desc)
+            if inventario.get(nombre, 0) < cant:
+                faltantes.append(nombre)
+        if faltantes:
+            QtWidgets.QMessageBox.warning(
+                ventana,
+                "Stock insuficiente",
+                "No hay stock para: " + ", ".join(faltantes),
+            )
+            return
+        for desc, _ in pres.values():
+            nombre, cant = parse_item(desc)
+            inventario[nombre] = inventario.get(nombre, 0) - cant
+        guardar_inventario(INVENTARIO_FILE, inventario)
+        registrar_movimiento(INGRESOS_FILE, concepto, total)
+        QtWidgets.QMessageBox.information(ventana, "Venta", "Venta registrada")
+
+    def mostrar_inventario() -> None:
+        dlg = QtWidgets.QDialog(ventana)
+        dlg.setWindowTitle("Inventario")
+        lay = QtWidgets.QVBoxLayout(dlg)
+        table = QtWidgets.QTableWidget(len(inventario), 2)
+        table.setHorizontalHeaderLabels(["Producto", "Cantidad"])
+        for r, (prod, cant) in enumerate(inventario.items()):
+            table.setItem(r, 0, QtWidgets.QTableWidgetItem(prod))
+            table.setItem(r, 1, QtWidgets.QTableWidgetItem(str(cant)))
+        table.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
+        lay.addWidget(table)
+        dlg.resize(600, 400)
+        dlg.exec_()
+
+    def mostrar_movimientos() -> None:
+        dlg = QtWidgets.QDialog(ventana)
+        dlg.setWindowTitle("Ingresos y egresos")
+        lay = QtWidgets.QVBoxLayout(dlg)
+        movs = []
+        if os.path.exists(INGRESOS_FILE):
+            from openpyxl import load_workbook
+
+            wb = load_workbook(INGRESOS_FILE)
+            ws = wb.active
+            for row in ws.iter_rows(min_row=2, values_only=True):
+                movs.append(row)
+        table = QtWidgets.QTableWidget(len(movs), 3)
+        table.setHorizontalHeaderLabels(["Fecha", "Concepto", "Monto"])
+        for r, (f, c, m) in enumerate(movs):
+            table.setItem(r, 0, QtWidgets.QTableWidgetItem(str(f)))
+            table.setItem(r, 1, QtWidgets.QTableWidgetItem(str(c)))
+            table.setItem(r, 2, QtWidgets.QTableWidgetItem(f"{m:.2f}"))
+        table.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
+        lay.addWidget(table)
+        form = QtWidgets.QHBoxLayout()
+        txt_c = QtWidgets.QLineEdit()
+        txt_m = QtWidgets.QLineEdit()
+        btn_add = QtWidgets.QPushButton("Registrar")
+        form.addWidget(txt_c)
+        form.addWidget(txt_m)
+        form.addWidget(btn_add)
+        lay.addLayout(form)
+
+        def registrar_local() -> None:
+            try:
+                monto = float(txt_m.text() or 0)
+            except ValueError:
+                monto = 0.0
+            concepto = txt_c.text() or "Movimiento"
+            registrar_movimiento(INGRESOS_FILE, concepto, monto)
+            dlg.accept()
+
+        btn_add.clicked.connect(registrar_local)
+        dlg.resize(700, 500)
+        dlg.exec_()
+
     def ejecutar() -> None:
         nonlocal resultados, daily_kwh
         cargas: list[dict[str, float]] = []
+        # Asegura que se guarden los cambios en celdas editadas
+        for r in range(tabla.rowCount()):
+            for c in range(tabla.columnCount()):
+                item = tabla.item(r, c)
+                if item is not None:
+                    tabla.closePersistentEditor(item)
         for row in range(tabla.rowCount()):
             if tabla.item(row, 0).checkState() != QtCore.Qt.Checked:
                 continue
@@ -262,29 +378,42 @@ def main() -> None:
         dlg.exec_()
 
     def mostrar_sistemas() -> None:
-        html = ""
+        dlg = QtWidgets.QDialog(ventana)
+        dlg.setWindowTitle("Sistemas recomendados")
+        dlg.resize(900, 600)
+        lay = QtWidgets.QVBoxLayout(dlg)
+
+        colores = {"Barato": "#dff0d8", "Intermedio": "#fff3cd", "Premium": "#f8d7da"}
         for cat in CATEGORIES:
             pres = resultados.get(cat, {})
             if not pres:
                 continue
             costo, costo_kwh, payback, ahorro = calcular_amortizacion(pres, daily_kwh)
-            html += f"<h3>{cat}</h3>"
-            html += "<table border='1' cellspacing='0' cellpadding='2'>"
+            color = colores.get(cat, "#ffffff")
+            html = f"<h3 style='background:{color};padding:4px;'>{cat}</h3>"
+            html += "<table border='1' cellspacing='0' cellpadding='4' width='100%' style='margin-bottom:10px;'>"
+            html += "<tr><th>Componente</th><th>Detalle</th><th>Precio</th><th>Con igv</th></tr>"
             for comp, (desc, precio) in pres.items():
-                html += f"<tr><td>{comp}</td><td>{desc}</td><td>{precio:.2f} PEN</td></tr>"
-            html += f"<tr><td colspan='2'><b>Total</b></td><td>{costo:.2f} PEN</td></tr>"
-            html += f"<tr><td colspan='2'>Costo kWh</td><td>{costo_kwh:.2f} PEN</td></tr>"
-            html += f"<tr><td colspan='2'>Payback</td><td>{payback:.2f} años</td></tr>"
-            html += f"<tr><td colspan='2'>Ahorro {VIDA_UTIL_ANIOS} años</td><td>{ahorro:.2f} PEN</td></tr>"
-            html += "</table><br>"
+                con_igv = precio * 1.18
+                html += f"<tr><td>{comp}</td><td>{desc}</td><td>S/.{precio:.2f}</td><td>S/.{con_igv:.2f}</td></tr>"
+            con_igv_total = costo * 1.18
+            html += f"<tr style='font-weight:bold;'><td colspan='2'>Total</td><td>S/.{costo:.2f}</td><td>S/.{con_igv_total:.2f}</td></tr>"
+            html += f"<tr><td colspan='2'>Costo kWh</td><td colspan='2'>S/.{costo_kwh:.2f}</td></tr>"
+            html += f"<tr><td colspan='2'>Payback</td><td colspan='2'>{payback:.2f} años</td></tr>"
+            html += f"<tr><td colspan='2'>Ahorro {VIDA_UTIL_ANIOS} años</td><td colspan='2'>S/.{ahorro:.2f}</td></tr>"
+            html += "</table>"
 
-        dlg = QtWidgets.QDialog(ventana)
-        dlg.setWindowTitle("Sistemas recomendados")
-        dlg.resize(700, 500)
-        lay = QtWidgets.QVBoxLayout(dlg)
-        txt = QtWidgets.QTextBrowser()
-        txt.setHtml(html)
-        lay.addWidget(txt)
+            txt = QtWidgets.QTextBrowser()
+            txt.setHtml(html)
+            lay.addWidget(txt)
+            botones = QtWidgets.QHBoxLayout()
+            btn_v = QtWidgets.QPushButton(f"Vender {cat} sin IGV")
+            btn_vi = QtWidgets.QPushButton(f"Vender {cat} con IGV")
+            btn_v.clicked.connect(lambda _, c=cat: vender_sistema(c, False))
+            btn_vi.clicked.connect(lambda _, c=cat: vender_sistema(c, True))
+            botones.addWidget(btn_v)
+            botones.addWidget(btn_vi)
+            lay.addLayout(botones)
         dlg.exec_()
 
     btn_toggle.clicked.connect(toggle_checks)
@@ -293,6 +422,8 @@ def main() -> None:
     btn_anual.clicked.connect(lambda: mostrar_imagen("costo_anual_resultado.png"))
     btn_ahorro.clicked.connect(lambda: mostrar_imagen("ahorro_resultado.png"))
     btn_sistemas.clicked.connect(mostrar_sistemas)
+    btn_inventario.clicked.connect(mostrar_inventario)
+    btn_movimientos.clicked.connect(mostrar_movimientos)
 
     ventana.show()
     app.exec_()
