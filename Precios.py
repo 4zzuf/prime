@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import os
 from typing import Dict, List, Tuple
+import math
+import re
 
 try:
     from openpyxl import Workbook, load_workbook
@@ -29,7 +31,6 @@ def crear_excel_de_ejemplo(filename: str) -> None:
 
     datos = {
         "Paneles": [
-
             ("Barato", "Eco20", "20W", 60),
             ("Barato", "Eco30", "30W", 70),
             ("Barato", "Eco50", "50W", 100),
@@ -37,6 +38,10 @@ def crear_excel_de_ejemplo(filename: str) -> None:
             ("Intermedio", "Mid150", "150W", 230),
             ("Intermedio", "Mid200", "200W", 280),
             ("Premium", "Pro605", "605W", 800),
+            # Solo se consideran opciones de 100W en adelante
+            ("Barato", "Basic100", "100W", 150),
+            ("Intermedio", "Mid200", "200W", 250),
+            ("Premium", "Top300", "300W", 400),
         ],
         "Inversores": [
             ("Barato", "Mod500", "Onda modificada 500W", 150),
@@ -44,6 +49,7 @@ def crear_excel_de_ejemplo(filename: str) -> None:
             ("Intermedio", "Pura1500", "Onda pura 1500W", 350),
             ("Intermedio", "Pura1800", "Onda pura 1800W", 420),
             ("Premium", "Hibrido4000", "Híbrido 4000W", 900),
+            ("Premium", "Hibrido3000", "Híbrido 3000W", 700),
         ],
         "Baterias": [
             ("Barato", "AGM7", "AGM 7Ah", 40),
@@ -56,6 +62,9 @@ def crear_excel_de_ejemplo(filename: str) -> None:
             ("Intermedio", "Gel300", "Gel 300Ah", 600),
             ("Premium", "Li100", "Litio 100Ah", 800),
             ("Premium", "Li200", "Litio 200Ah", 1400),
+            ("Barato", "AGM60", "AGM 60Ah", 160),
+            ("Intermedio", "Gel100", "Gel 100Ah", 240),
+            ("Premium", "Li200", "Litio 200Ah", 400),
         ],
         "Controladores": [
             ("Barato", "PWM10", "PWM 10A", 30),
@@ -63,6 +72,9 @@ def crear_excel_de_ejemplo(filename: str) -> None:
             ("Barato", "PWM30", "PWM 30A", 60),
             ("Intermedio", "MPPT15", "MPPT 15A", 120),
             ("Premium", "MPPT20", "MPPT 20A", 180),
+            ("Barato", "PWM10", "PWM 10A", 50),
+            ("Intermedio", "PWM20", "PWM 20A", 100),
+            ("Premium", "MPPT30", "MPPT 30A", 150),
 
         ],
     }
@@ -108,14 +120,24 @@ def crear_excel_cargas_de_ejemplo(filename: str) -> None:
 
     wb.save(filename)
 
-def leer_datos(filename: str) -> Dict[str, Dict[str, List[Tuple[str, float]]]]:
-    """Lee el archivo Excel y organiza los datos por componente y categoria."""
+def _extraer_numero(texto: str) -> float:
+    """Extrae el primer numero encontrado en un texto."""
+
+    m = re.search(r"([0-9]+(?:\.[0-9]+)?)", texto)
+    return float(m.group(1)) if m else 0.0
+
+
+def leer_datos(filename: str) -> Dict[str, Dict[str, List[Tuple[str, float, float]]]]:
+    """Lee el archivo Excel y organiza los datos por componente y categoria.
+
+    Devuelve nombre, capacidad (W, Ah o A) y precio.
+    """
 
     if load_workbook is None:
         raise ImportError("openpyxl no esta instalado")
 
     wb = load_workbook(filename)
-    datos: Dict[str, Dict[str, List[Tuple[str, float]]]] = {}
+    datos: Dict[str, Dict[str, List[Tuple[str, float, float]]]] = {}
     for hoja in SHEETS:
         ws = wb[hoja]
         datos[hoja] = {cat: [] for cat in CATEGORIES}
@@ -126,7 +148,8 @@ def leer_datos(filename: str) -> Dict[str, Dict[str, List[Tuple[str, float]]]]:
             categoria, marca, detalle, precio = row
             if categoria in CATEGORIES:
                 nombre = f"{marca} {detalle}"
-                datos[hoja][categoria].append((nombre, float(precio)))
+                capacidad = _extraer_numero(str(detalle))
+                datos[hoja][categoria].append((nombre, capacidad, float(precio)))
     return datos
 
 def leer_cargas(filename: str) -> List[Dict[str, float]]:
@@ -139,6 +162,12 @@ def leer_cargas(filename: str) -> List[Dict[str, float]]:
     ws = wb.active
     cargas = []
     for row in ws.iter_rows(min_row=2, values_only=True):
+        if not row:
+            continue
+
+        valores = list(row)
+        if len(valores) < 7:
+            valores.extend([0.0] * (7 - len(valores)))
 
         (
             aparato,
@@ -148,7 +177,7 @@ def leer_cargas(filename: str) -> List[Dict[str, float]]:
             fin_am,
             inicio_pm,
             fin_pm,
-        ) = row
+        ) = valores[:7]
 
         cargas.append(
             {
@@ -233,29 +262,77 @@ def calcular_necesidades(
     return potencia_panel, capacidad_bateria
 
 
-def elegir_componente(opciones: Dict[str, List[Tuple[str, float]]], categoria: str) -> Tuple[str, float]:
+def potencia_maxima_demanda(cargas: List[Dict[str, float]]) -> float:
+    """Calcula la potencia simultanea maxima de las cargas."""
 
-    """Elige el componente con menor precio dentro de la categoria."""
+    demanda_por_hora = {h: 0.0 for h in range(24)}
+    for carga in cargas:
+        potencia = carga["carga"] * carga["cantidad"]
+        for inicio, fin in [
+            (carga["inicio_am"], carga["fin_am"]),
+            (carga["inicio_pm"], carga["fin_pm"]),
+        ]:
+            for hora in range(int(inicio), int(fin)):
+                demanda_por_hora[hora] += potencia
+    return max(demanda_por_hora.values())
 
-    candidatos = opciones.get(categoria, [])
-    if not candidatos:
-        return ("Sin datos", 0.0)
-    return min(candidatos, key=lambda x: x[1])
 
-
-def calcular_presupuestos(
-    datos: Dict[str, Dict[str, List[Tuple[str, float]]]]
+def calcular_kit(
+    datos: Dict[str, Dict[str, List[Tuple[str, float, float]]]],
+    potencia_panel: float,
+    capacidad_bateria: float,
+    demanda_maxima: float,
 ) -> Dict[str, Dict[str, Tuple[str, float]]]:
-    """Calcula el componente seleccionado y su precio para cada presupuesto."""
+    """Selecciona componentes suficientes para cubrir las necesidades."""
 
     resultados: Dict[str, Dict[str, Tuple[str, float]]] = {
         cat: {} for cat in CATEGORIES
     }
 
     for categoria in CATEGORIES:
-        for componente, opciones in datos.items():
-            marca, precio = elegir_componente(opciones, categoria)
-            resultados[categoria][componente] = (marca, precio)
+        # Paneles
+        mejor_total = math.inf
+        mejor_desc = "Sin datos"
+        for nombre, capacidad, precio in datos["Paneles"].get(categoria, []):
+            if capacidad <= 0:
+                continue
+            cantidad = math.ceil(potencia_panel / capacidad)
+            total = cantidad * precio
+            if total < mejor_total:
+                mejor_total = total
+                mejor_desc = f"{cantidad} x {nombre}"
+        resultados[categoria]["Paneles"] = (mejor_desc, mejor_total if mejor_total < math.inf else 0.0)
+
+        # Baterias
+        mejor_total = math.inf
+        mejor_desc = "Sin datos"
+        for nombre, capacidad, precio in datos["Baterias"].get(categoria, []):
+            if capacidad <= 0:
+                continue
+            cantidad = math.ceil(capacidad_bateria / capacidad)
+            total = cantidad * precio
+            if total < mejor_total:
+                mejor_total = total
+                mejor_desc = f"{cantidad} x {nombre}"
+        resultados[categoria]["Baterias"] = (mejor_desc, mejor_total if mejor_total < math.inf else 0.0)
+
+        # Inversores
+        mejor_precio = math.inf
+        mejor_desc = "Sin datos"
+        for nombre, capacidad, precio in datos["Inversores"].get(categoria, []):
+            if capacidad >= demanda_maxima and precio < mejor_precio:
+                mejor_precio = precio
+                mejor_desc = nombre
+        resultados[categoria]["Inversores"] = (mejor_desc, mejor_precio if mejor_precio < math.inf else 0.0)
+
+        # Controladores: se elige el mas barato
+        mejor_precio = math.inf
+        mejor_desc = "Sin datos"
+        for nombre, capacidad, precio in datos["Controladores"].get(categoria, []):
+            if precio < mejor_precio:
+                mejor_precio = precio
+                mejor_desc = nombre
+        resultados[categoria]["Controladores"] = (mejor_desc, mejor_precio if mejor_precio < math.inf else 0.0)
 
     return resultados
 
@@ -285,7 +362,8 @@ def main() -> None:
     cargas = leer_cargas(LOADS_FILE)
     curva = curva_irradiacion_cusco()
     potencia_panel, capacidad_bateria = calcular_necesidades(cargas, curva)
-    presupuestos = calcular_presupuestos(datos)
+    demanda_maxima = potencia_maxima_demanda(cargas)
+    presupuestos = calcular_kit(datos, potencia_panel, capacidad_bateria, demanda_maxima)
 
     imprimir_presupuestos(presupuestos)
     print("Requerimientos del sistema:")
