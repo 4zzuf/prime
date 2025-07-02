@@ -146,12 +146,13 @@ def main() -> None:
     app = QtWidgets.QApplication([])
     ventana = QtWidgets.QWidget()
     ventana.setWindowTitle("Simulador Solar")
-    layout = QtWidgets.QVBoxLayout(ventana)
+
+    layout_principal = QtWidgets.QHBoxLayout(ventana)
 
     headers = ["Usar", "Aparato", "Cantidad", "Carga(W)", "HorasDia", "HorasNoche"]
     tabla = QtWidgets.QTableWidget(len(cargas_base), len(headers))
     tabla.setHorizontalHeaderLabels(headers)
-    ventana.resize(800, 600)
+    ventana.resize(900, 600)
 
     for fila, carga in enumerate(cargas_base):
         chk = QtWidgets.QTableWidgetItem()
@@ -163,24 +164,43 @@ def main() -> None:
         tabla.setItem(fila, 4, QtWidgets.QTableWidgetItem(str(carga["horas_dia"])))
         tabla.setItem(fila, 5, QtWidgets.QTableWidgetItem(str(carga["horas_noche"])))
 
-    layout.addWidget(tabla)
+    # ----- Lado izquierdo -----
+    layout_izq = QtWidgets.QVBoxLayout()
+    layout_izq.addWidget(tabla)
+    btn_toggle = QtWidgets.QPushButton("Marcar/Desmarcar todo")
+    layout_izq.addWidget(btn_toggle)
+    layout_principal.addLayout(layout_izq)
 
+    # ----- Lado derecho -----
+    layout_der = QtWidgets.QVBoxLayout()
     btn_ejecutar = QtWidgets.QPushButton("Ejecutar simulacion")
-    layout.addWidget(btn_ejecutar)
-
-    cont_botones = QtWidgets.QHBoxLayout()
+    layout_der.addWidget(btn_ejecutar)
+    
     btn_costo = QtWidgets.QPushButton("Costo acumulado")
     btn_anual = QtWidgets.QPushButton("Costo anual")
     btn_ahorro = QtWidgets.QPushButton("Ahorro")
     btn_sistemas = QtWidgets.QPushButton("Sistemas")
     for b in (btn_costo, btn_anual, btn_ahorro, btn_sistemas):
         b.setEnabled(False)
-        cont_botones.addWidget(b)
-    layout.addLayout(cont_botones)
+
+        layout_der.addWidget(b)
 
     salida = QtWidgets.QTextEdit()
     salida.setReadOnly(True)
-    layout.addWidget(salida)
+    layout_der.addWidget(salida)
+
+    layout_der.addStretch(1)
+    layout_principal.addLayout(layout_der)
+
+    def toggle_checks() -> None:
+        """Marca o desmarca todas las cargas."""
+        any_unchecked = any(
+            tabla.item(r, 0).checkState() != QtCore.Qt.Checked
+            for r in range(tabla.rowCount())
+        )
+        nuevo = QtCore.Qt.Checked if any_unchecked else QtCore.Qt.Unchecked
+        for r in range(tabla.rowCount()):
+            tabla.item(r, 0).setCheckState(nuevo)
 
     resultados: Dict[str, Dict[str, Tuple[str, float]]] = {}
     daily_kwh: float = 0.0
@@ -204,6 +224,7 @@ def main() -> None:
                     "horas_dia": horas_dia,
                     "horas_noche": horas_noche,
                 }
+
             )
 
         curva = curva_irradiacion_cusco()
@@ -229,6 +250,8 @@ def main() -> None:
         for b in (btn_costo, btn_anual, btn_ahorro, btn_sistemas):
             b.setEnabled(True)
 
+        mostrar_sistemas()
+
     def mostrar_imagen(ruta: str) -> None:
         dlg = QtWidgets.QDialog(ventana)
         lbl = QtWidgets.QLabel()
@@ -239,24 +262,36 @@ def main() -> None:
         dlg.exec_()
 
     def mostrar_sistemas() -> None:
-        texto = ""
+        colores = {
+            "Barato": "#d9534f",
+            "Intermedio": "#f0ad4e",
+            "Premium": "#5cb85c",
+        }
+        html = ""
         for cat in CATEGORIES:
             pres = resultados.get(cat, {})
             if not pres:
                 continue
             costo, costo_kwh, payback, ahorro = calcular_amortizacion(pres, daily_kwh)
-            texto += f"{cat}: {costo:.2f} PEN\n"
+            color = colores.get(cat, "black")
+            html += f"<h3 style='color:{color}'>{cat}: {costo:.2f} PEN</h3><ul>"
             for comp, (desc, precio) in pres.items():
-                texto += f"  {comp}: {desc} - {precio:.2f} PEN\n"
-            texto += (
-                f"  Costo kWh: {costo_kwh:.2f} PEN\n"
-                f"  Payback: {payback:.2f} años\n"
-                f"  Ahorro {VIDA_UTIL_ANIOS} años: {ahorro:.2f} PEN\n\n"
+                html += f"<li><b>{comp}</b>: {desc} - {precio:.2f} PEN</li>"
+            html += (
+                f"</ul><p>Costo kWh: {costo_kwh:.2f} PEN<br>"
+                f"Payback: {payback:.2f} años<br>"
+                f"Ahorro {VIDA_UTIL_ANIOS} años: {ahorro:.2f} PEN</p>"
             )
-        dlg = QtWidgets.QMessageBox(ventana)
+
+        dlg = QtWidgets.QDialog(ventana)
         dlg.setWindowTitle("Sistemas recomendados")
-        dlg.setText(texto)
+        lay = QtWidgets.QVBoxLayout(dlg)
+        txt = QtWidgets.QTextBrowser()
+        txt.setHtml(html)
+        lay.addWidget(txt)
         dlg.exec_()
+
+    btn_toggle.clicked.connect(toggle_checks)
 
     btn_ejecutar.clicked.connect(ejecutar)
     btn_costo.clicked.connect(lambda: mostrar_imagen("costo_resultado.png"))
