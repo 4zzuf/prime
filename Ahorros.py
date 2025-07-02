@@ -146,13 +146,13 @@ def main() -> None:
     app = QtWidgets.QApplication([])
     ventana = QtWidgets.QWidget()
     ventana.setWindowTitle("Simulador Solar")
+
     layout_principal = QtWidgets.QHBoxLayout(ventana)
 
     headers = ["Usar", "Aparato", "Cantidad", "Carga(W)", "HorasDia", "HorasNoche"]
     tabla = QtWidgets.QTableWidget(len(cargas_base), len(headers))
     tabla.setHorizontalHeaderLabels(headers)
     ventana.resize(1100, 700)
-
     for fila, carga in enumerate(cargas_base):
         chk = QtWidgets.QTableWidgetItem()
         chk.setCheckState(QtCore.Qt.Checked)
@@ -174,7 +174,6 @@ def main() -> None:
     layout_der = QtWidgets.QVBoxLayout()
     btn_ejecutar = QtWidgets.QPushButton("Ejecutar simulacion")
     layout_der.addWidget(btn_ejecutar)
-
     btn_costo = QtWidgets.QPushButton("Costo acumulado")
     btn_anual = QtWidgets.QPushButton("Costo anual")
     btn_ahorro = QtWidgets.QPushButton("Ahorro")
@@ -229,7 +228,6 @@ def main() -> None:
         demanda_max = potencia_maxima_demanda(cargas)
         resultados = calcular_kit(datos, pot_panel, cap_bat, demanda_max)
         daily_kwh = energia_diaria_kwh(cargas, curva)
-
         cap_gel = cap_bat / 0.5
         cap_li = cap_bat / 0.9
         texto = (
