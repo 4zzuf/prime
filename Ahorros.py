@@ -124,6 +124,8 @@ def graficar_ahorro_largo_plazo(costo_sistema: float, daily_kwh: float, nombre: 
     plt.close()
     
 def main() -> None:
+    """Abre una interfaz grafica para la simulacion."""
+
     if not os.path.exists(FILE):
         crear_excel_de_ejemplo(FILE)
         print(f"Se creó el archivo '{FILE}' con datos de ejemplo.")
@@ -133,38 +135,169 @@ def main() -> None:
         print(f"Se creó el archivo '{LOADS_FILE}' con datos de ejemplo.")
 
     datos = leer_datos(FILE)
-    cargas = leer_cargas(LOADS_FILE)
-    cargas = seleccionar_cargas_gui(cargas)
-    curva = curva_irradiacion_cusco()
-    potencia_panel, capacidad_bateria = calcular_necesidades(cargas, curva)
-    demanda_maxima = potencia_maxima_demanda(cargas)
-    presupuestos = calcular_kit(datos, potencia_panel, capacidad_bateria, demanda_maxima)
+    cargas_base = leer_cargas(LOADS_FILE)
 
-    daily_kwh = energia_diaria_kwh(cargas, curva)
+    try:
+        from PyQt5 import QtCore, QtGui, QtWidgets
+    except Exception as exc:  # pragma: no cover - dependencias ausentes
+        print(f"No se pudo abrir la interfaz grafica: {exc}")
+        return
 
-    print(f"Consumo diario: {daily_kwh:.2f} kWh")
-    print(f"Potencia de panel requerida: {potencia_panel:.2f} W")
-    print(f"Capacidad de batería requerida: {capacidad_bateria:.2f} Ah")
+    app = QtWidgets.QApplication([])
+    ventana = QtWidgets.QWidget()
+    ventana.setWindowTitle("Simulador Solar")
+    layout_principal = QtWidgets.QHBoxLayout(ventana)
 
-    for categoria in CATEGORIES:
-        pres = presupuestos[categoria]
-        costo, costo_kwh, payback, ahorro = calcular_amortizacion(pres, daily_kwh)
-        print(f"\n{categoria}:")
-        print(f"  Costo sistema: {costo:.2f} PEN")
-        print(f"  Costo amortizado por kWh: {costo_kwh:.2f} PEN")
-        print(f"  Tiempo de amortización: {payback:.2f} años")
-        print(f"  Ahorro estimado a {VIDA_UTIL_ANIOS} años: {ahorro:.2f} PEN")
-        try:
-            graficar_costo_acumulado(costo, daily_kwh, categoria)
+    headers = ["Usar", "Aparato", "Cantidad", "Carga(W)", "HorasDia", "HorasNoche"]
+    tabla = QtWidgets.QTableWidget(len(cargas_base), len(headers))
+    tabla.setHorizontalHeaderLabels(headers)
+    ventana.resize(1100, 700)
 
-            graficar_costo_anual(costo, daily_kwh, categoria)
-            graficar_ahorro_largo_plazo(costo, daily_kwh, categoria)
-            print(
-                f"  Graficos guardados: costo_{categoria}.png, costo_anual_{categoria}.png, ahorro_{categoria}.png"
+    for fila, carga in enumerate(cargas_base):
+        chk = QtWidgets.QTableWidgetItem()
+        chk.setCheckState(QtCore.Qt.Checked)
+        tabla.setItem(fila, 0, chk)
+        tabla.setItem(fila, 1, QtWidgets.QTableWidgetItem(carga["aparato"]))
+        tabla.setItem(fila, 2, QtWidgets.QTableWidgetItem(str(carga["cantidad"])))
+        tabla.setItem(fila, 3, QtWidgets.QTableWidgetItem(str(carga["carga"])))
+        tabla.setItem(fila, 4, QtWidgets.QTableWidgetItem(str(carga["horas_dia"])))
+        tabla.setItem(fila, 5, QtWidgets.QTableWidgetItem(str(carga["horas_noche"])))
+
+    # ----- Lado izquierdo -----
+    layout_izq = QtWidgets.QVBoxLayout()
+    layout_izq.addWidget(tabla)
+    btn_toggle = QtWidgets.QPushButton("Marcar/Desmarcar todo")
+    layout_izq.addWidget(btn_toggle)
+    layout_principal.addLayout(layout_izq)
+
+    # ----- Lado derecho -----
+    layout_der = QtWidgets.QVBoxLayout()
+    btn_ejecutar = QtWidgets.QPushButton("Ejecutar simulacion")
+    layout_der.addWidget(btn_ejecutar)
+
+    btn_costo = QtWidgets.QPushButton("Costo acumulado")
+    btn_anual = QtWidgets.QPushButton("Costo anual")
+    btn_ahorro = QtWidgets.QPushButton("Ahorro")
+    btn_sistemas = QtWidgets.QPushButton("Sistemas")
+    for b in (btn_costo, btn_anual, btn_ahorro, btn_sistemas):
+        b.setEnabled(False)
+        layout_der.addWidget(b)
+
+    salida = QtWidgets.QTextEdit()
+    salida.setReadOnly(True)
+    layout_der.addWidget(salida)
+
+    layout_der.addStretch(1)
+    layout_principal.addLayout(layout_der)
+
+    def toggle_checks() -> None:
+        """Marca o desmarca todas las cargas."""
+        any_unchecked = any(
+            tabla.item(r, 0).checkState() != QtCore.Qt.Checked
+            for r in range(tabla.rowCount())
+        )
+        nuevo = QtCore.Qt.Checked if any_unchecked else QtCore.Qt.Unchecked
+        for r in range(tabla.rowCount()):
+            tabla.item(r, 0).setCheckState(nuevo)
+
+    resultados: Dict[str, Dict[str, Tuple[str, float]]] = {}
+    daily_kwh: float = 0.0
+
+    def ejecutar() -> None:
+        nonlocal resultados, daily_kwh
+        cargas: list[dict[str, float]] = []
+        for row in range(tabla.rowCount()):
+            if tabla.item(row, 0).checkState() != QtCore.Qt.Checked:
+                continue
+            aparato = tabla.item(row, 1).text()
+            cantidad = float(tabla.item(row, 2).text() or 0)
+            carga_w = float(tabla.item(row, 3).text() or 0)
+            horas_dia = float(tabla.item(row, 4).text() or 0)
+            horas_noche = float(tabla.item(row, 5).text() or 0)
+            cargas.append(
+                {
+                    "aparato": aparato,
+                    "cantidad": cantidad,
+                    "carga": carga_w,
+                    "horas_dia": horas_dia,
+                    "horas_noche": horas_noche,
+                }
             )
 
-        except ImportError as exc:
-            print(f"  No se pudo generar grafico: {exc}")
+        curva = curva_irradiacion_cusco()
+        pot_panel, cap_bat = calcular_necesidades(cargas, curva)
+        demanda_max = potencia_maxima_demanda(cargas)
+        resultados = calcular_kit(datos, pot_panel, cap_bat, demanda_max)
+        daily_kwh = energia_diaria_kwh(cargas, curva)
+
+        cap_gel = cap_bat / 0.5
+        cap_li = cap_bat / 0.9
+        texto = (
+            f"Consumo diario: {daily_kwh:.2f} kWh\n"
+            f"Potencia de panel requerida: {pot_panel:.2f} W\n"
+            "Capacidad de bateria requerida:\n"
+            f"  Si es de Gel/Agm : {cap_gel:.2f} Ah\n"
+            f"  Si es de litio: {cap_li:.2f} Ah"
+        )
+        salida.setPlainText(texto)
+
+        # Graficos para la categoria Barato por defecto
+        pres = resultados[CATEGORIES[0]]
+        costo, _, _, _ = calcular_amortizacion(pres, daily_kwh)
+        graficar_costo_acumulado(costo, daily_kwh, "resultado")
+        graficar_costo_anual(costo, daily_kwh, "resultado")
+        graficar_ahorro_largo_plazo(costo, daily_kwh, "resultado")
+
+        for b in (btn_costo, btn_anual, btn_ahorro, btn_sistemas):
+            b.setEnabled(True)
+
+        mostrar_sistemas()
+
+    def mostrar_imagen(ruta: str) -> None:
+        dlg = QtWidgets.QDialog(ventana)
+        dlg.resize(600, 400)
+        lbl = QtWidgets.QLabel()
+        pix = QtGui.QPixmap(ruta)
+        lbl.setPixmap(pix)
+        lay = QtWidgets.QVBoxLayout(dlg)
+        lay.addWidget(lbl)
+        dlg.exec_()
+
+    def mostrar_sistemas() -> None:
+        html = ""
+        for cat in CATEGORIES:
+            pres = resultados.get(cat, {})
+            if not pres:
+                continue
+            costo, costo_kwh, payback, ahorro = calcular_amortizacion(pres, daily_kwh)
+            html += f"<h3>{cat}</h3>"
+            html += "<table border='1' cellspacing='0' cellpadding='2'>"
+            for comp, (desc, precio) in pres.items():
+                html += f"<tr><td>{comp}</td><td>{desc}</td><td>{precio:.2f} PEN</td></tr>"
+            html += f"<tr><td colspan='2'><b>Total</b></td><td>{costo:.2f} PEN</td></tr>"
+            html += f"<tr><td colspan='2'>Costo kWh</td><td>{costo_kwh:.2f} PEN</td></tr>"
+            html += f"<tr><td colspan='2'>Payback</td><td>{payback:.2f} años</td></tr>"
+            html += f"<tr><td colspan='2'>Ahorro {VIDA_UTIL_ANIOS} años</td><td>{ahorro:.2f} PEN</td></tr>"
+            html += "</table><br>"
+
+        dlg = QtWidgets.QDialog(ventana)
+        dlg.setWindowTitle("Sistemas recomendados")
+        dlg.resize(700, 500)
+        lay = QtWidgets.QVBoxLayout(dlg)
+        txt = QtWidgets.QTextBrowser()
+        txt.setHtml(html)
+        lay.addWidget(txt)
+        dlg.exec_()
+
+    btn_toggle.clicked.connect(toggle_checks)
+    btn_ejecutar.clicked.connect(ejecutar)
+    btn_costo.clicked.connect(lambda: mostrar_imagen("costo_resultado.png"))
+    btn_anual.clicked.connect(lambda: mostrar_imagen("costo_anual_resultado.png"))
+    btn_ahorro.clicked.connect(lambda: mostrar_imagen("ahorro_resultado.png"))
+    btn_sistemas.clicked.connect(mostrar_sistemas)
+
+    ventana.show()
+    app.exec_()
 
 
 if __name__ == "__main__":
