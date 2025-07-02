@@ -13,6 +13,7 @@ except ImportError:  # pragma: no cover - dependency may not be installed
 
 FILE = "equipos.xlsx"
 LOADS_FILE = "cargas.xlsx"
+
 SHEETS = ["Paneles", "Inversores", "Baterias", "Controladores"]
 CATEGORIES = ["Barato", "Intermedio", "Premium"]
 
@@ -79,7 +80,6 @@ def crear_excel_cargas_de_ejemplo(filename: str) -> None:
 
     wb.save(filename)
 
-
 def leer_datos(filename: str) -> Dict[str, Dict[str, List[Tuple[str, float]]]]:
     """Lee el archivo Excel y organiza los datos por componente y categoria."""
 
@@ -95,7 +95,6 @@ def leer_datos(filename: str) -> Dict[str, Dict[str, List[Tuple[str, float]]]]:
             if categoria in CATEGORIES:
                 datos[hoja][categoria].append((str(marca), float(precio)))
     return datos
-
 
 def leer_cargas(filename: str) -> List[Dict[str, float]]:
     """Lee el excel de cargas y devuelve una lista de diccionarios."""
@@ -163,6 +162,7 @@ def calcular_necesidades(cargas: List[Dict[str, float]], curva: Dict[int, float]
 
 
 def elegir_componente(opciones: Dict[str, List[Tuple[str, float]]], categoria: str) -> Tuple[str, float]:
+
     """Elige el componente con menor precio dentro de la categoria."""
 
     candidatos = opciones.get(categoria, [])
