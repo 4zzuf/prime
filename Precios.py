@@ -130,6 +130,7 @@ def crear_excel_cargas_de_ejemplo(filename: str) -> None:
         ("Refri pequeña", 1, "100 W", "6 hr", "6 hr"),
         ("Parlante bletooth", 0, "20 W", "1 hr", "7 hr"),
         ("Radio pequeña", 0, "5 W", "4 hr", "3 hr"),
+
     ]
     for fila in datos:
         ws.append(fila)
