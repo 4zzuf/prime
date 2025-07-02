@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import re
+import hashlib
 from typing import Dict, Tuple
 
 from Precios import (
@@ -31,6 +32,18 @@ from Precios import (
 
 COSTO_RED = 0.83  # PEN por kWh
 VIDA_UTIL_ANIOS = 20
+
+# --- Credenciales para modificar inventario ---
+LOGIN_USER = "Michifus"
+_SALT = b"\xf9\x1d%T\xd9\x96\xc5\xf7\xca?2\xaa\x81\xb1`L"
+_PWD_HASH = "9628bfacb991b822576cf52d147609f0146ef646b3efbb71372517d1af07db14"
+
+def _verificar_login(usuario: str, contrasena: str) -> bool:
+    """Devuelve True si las credenciales coinciden."""
+    hashed = hashlib.pbkdf2_hmac(
+        "sha256", contrasena.encode(), _SALT, 100000
+    ).hex()
+    return usuario == LOGIN_USER and hashed == _PWD_HASH
 
 def energia_diaria_kwh(cargas: list[dict[str, float]], curva: Dict[int, float]) -> float:
     """Suma el consumo diario en kWh a partir de los intervalos."""
@@ -159,6 +172,33 @@ def main() -> None:
     app = QtWidgets.QApplication([])
     ventana = QtWidgets.QWidget()
     ventana.setWindowTitle("Simulador Solar")
+
+    def pedir_login() -> bool:
+        """Solicita credenciales y las valida."""
+        dlg = QtWidgets.QDialog(ventana)
+        dlg.setWindowTitle("Iniciar sesión")
+        form = QtWidgets.QFormLayout(dlg)
+        usuario = QtWidgets.QLineEdit()
+        contrasena = QtWidgets.QLineEdit()
+        contrasena.setEchoMode(QtWidgets.QLineEdit.Password)
+        form.addRow("Usuario", usuario)
+        form.addRow("Contraseña", contrasena)
+        botones = QtWidgets.QDialogButtonBox(
+            QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel
+        )
+        form.addRow(botones)
+
+        def aceptar() -> None:
+            if _verificar_login(usuario.text(), contrasena.text()):
+                dlg.accept()
+            else:
+                QtWidgets.QMessageBox.warning(
+                    dlg, "Error", "Credenciales incorrectas"
+                )
+
+        botones.accepted.connect(aceptar)
+        botones.rejected.connect(dlg.reject)
+        return dlg.exec_() == QtWidgets.QDialog.Accepted
     layout_principal = QtWidgets.QHBoxLayout(ventana)
 
     headers = ["Usar", "Aparato", "Cantidad", "Carga(W)", "HorasDia", "HorasNoche"]
@@ -267,6 +307,56 @@ def main() -> None:
             table.setItem(r, 1, QtWidgets.QTableWidgetItem(str(cant)))
         table.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
         lay.addWidget(table)
+
+        buttons = QtWidgets.QHBoxLayout()
+        btn_mod = QtWidgets.QPushButton("Modificar inventario")
+        btn_cerrar = QtWidgets.QPushButton("Cerrar")
+        buttons.addWidget(btn_mod)
+        buttons.addWidget(btn_cerrar)
+        lay.addLayout(buttons)
+
+        def habilitar_edicion() -> None:
+            if not pedir_login():
+                return
+            table.setEditTriggers(
+                QtWidgets.QAbstractItemView.DoubleClicked
+                | QtWidgets.QAbstractItemView.EditKeyPressed
+            )
+            btn_mod.setEnabled(False)
+            btn_guardar = QtWidgets.QPushButton("Guardar cambios")
+            buttons.addWidget(btn_guardar)
+
+            def guardar() -> None:
+                for r in range(table.rowCount()):
+                    prod_item = table.item(r, 0)
+                    qty_item = table.item(r, 1)
+                    if prod_item is None or qty_item is None:
+                        continue
+                    producto = prod_item.text()
+                    try:
+                        cantidad = float(qty_item.text())
+                        if cantidad < 0:
+                            raise ValueError
+                    except Exception:
+                        QtWidgets.QMessageBox.warning(
+                            dlg,
+                            "Error",
+                            f"Cantidad invalida para '{producto}'",
+                        )
+                        return
+                    inventario[producto] = cantidad
+                guardar_inventario(INVENTARIO_FILE, inventario)
+                table.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
+                QtWidgets.QMessageBox.information(
+                    dlg, "Inventario", "Cambios guardados"
+                )
+                btn_guardar.setEnabled(False)
+
+            btn_guardar.clicked.connect(guardar)
+
+        btn_mod.clicked.connect(habilitar_edicion)
+        btn_cerrar.clicked.connect(dlg.accept)
+
         dlg.resize(600, 400)
         dlg.exec_()
 
