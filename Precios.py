@@ -29,7 +29,6 @@ def crear_excel_de_ejemplo(filename: str) -> None:
 
     datos = {
         "Paneles": [
-
             ("Barato", "Eco20", "20W", 60),
             ("Barato", "Eco30", "30W", 70),
             ("Barato", "Eco50", "50W", 100),
@@ -37,6 +36,10 @@ def crear_excel_de_ejemplo(filename: str) -> None:
             ("Intermedio", "Mid150", "150W", 230),
             ("Intermedio", "Mid200", "200W", 280),
             ("Premium", "Pro605", "605W", 800),
+            # Solo se consideran opciones de 100W en adelante
+            ("Barato", "Basic100", "100W", 150),
+            ("Intermedio", "Mid200", "200W", 250),
+            ("Premium", "Top300", "300W", 400),
         ],
         "Inversores": [
             ("Barato", "Mod500", "Onda modificada 500W", 150),
@@ -44,6 +47,7 @@ def crear_excel_de_ejemplo(filename: str) -> None:
             ("Intermedio", "Pura1500", "Onda pura 1500W", 350),
             ("Intermedio", "Pura1800", "Onda pura 1800W", 420),
             ("Premium", "Hibrido4000", "Híbrido 4000W", 900),
+            ("Premium", "Hibrido3000", "Híbrido 3000W", 700),
         ],
         "Baterias": [
             ("Barato", "AGM7", "AGM 7Ah", 40),
@@ -56,6 +60,9 @@ def crear_excel_de_ejemplo(filename: str) -> None:
             ("Intermedio", "Gel300", "Gel 300Ah", 600),
             ("Premium", "Li100", "Litio 100Ah", 800),
             ("Premium", "Li200", "Litio 200Ah", 1400),
+            ("Barato", "AGM60", "AGM 60Ah", 160),
+            ("Intermedio", "Gel100", "Gel 100Ah", 240),
+            ("Premium", "Li200", "Litio 200Ah", 400),
         ],
         "Controladores": [
             ("Barato", "PWM10", "PWM 10A", 30),
@@ -63,6 +70,9 @@ def crear_excel_de_ejemplo(filename: str) -> None:
             ("Barato", "PWM30", "PWM 30A", 60),
             ("Intermedio", "MPPT15", "MPPT 15A", 120),
             ("Premium", "MPPT20", "MPPT 20A", 180),
+            ("Barato", "PWM10", "PWM 10A", 50),
+            ("Intermedio", "PWM20", "PWM 20A", 100),
+            ("Premium", "MPPT30", "MPPT 30A", 150),
 
         ],
     }
