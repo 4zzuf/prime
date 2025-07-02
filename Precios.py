@@ -29,6 +29,7 @@ def crear_excel_de_ejemplo(filename: str) -> None:
 
     datos = {
         "Paneles": [
+
             ("Barato", "Eco20", "20W", 60),
             ("Barato", "Eco30", "30W", 70),
             ("Barato", "Eco50", "50W", 100),
@@ -62,12 +63,15 @@ def crear_excel_de_ejemplo(filename: str) -> None:
             ("Barato", "PWM30", "PWM 30A", 60),
             ("Intermedio", "MPPT15", "MPPT 15A", 120),
             ("Premium", "MPPT20", "MPPT 20A", 180),
+
         ],
     }
 
     for nombre, filas in datos.items():
         ws = wb.create_sheet(title=nombre)
+
         ws.append(["Categoria", "Marca", "Detalle", "Precio"])
+
         for fila in filas:
             ws.append(fila)
 
@@ -83,6 +87,7 @@ def crear_excel_cargas_de_ejemplo(filename: str) -> None:
     wb = Workbook()
     ws = wb.active
     ws.title = "Cargas"
+
     ws.append([
         "Aparato",
         "Cantidad",
@@ -96,12 +101,12 @@ def crear_excel_cargas_de_ejemplo(filename: str) -> None:
         ("Foco LED", 4, 10, 6, 8, 18, 20),
         ("Laptop", 1, 100, 9, 12, 0, 0),
         ("Televisor", 1, 80, 0, 0, 19, 22),
+
     ]
     for fila in ejemplo:
         ws.append(fila)
 
     wb.save(filename)
-
 
 def leer_datos(filename: str) -> Dict[str, Dict[str, List[Tuple[str, float]]]]:
     """Lee el archivo Excel y organiza los datos por componente y categoria."""
@@ -114,6 +119,7 @@ def leer_datos(filename: str) -> Dict[str, Dict[str, List[Tuple[str, float]]]]:
     for hoja in SHEETS:
         ws = wb[hoja]
         datos[hoja] = {cat: [] for cat in CATEGORIES}
+
         for row in ws.iter_rows(min_row=2, values_only=True):
             if len(row) < 4:
                 continue
@@ -122,7 +128,6 @@ def leer_datos(filename: str) -> Dict[str, Dict[str, List[Tuple[str, float]]]]:
                 nombre = f"{marca} {detalle}"
                 datos[hoja][categoria].append((nombre, float(precio)))
     return datos
-
 
 def leer_cargas(filename: str) -> List[Dict[str, float]]:
     """Lee el excel de cargas y devuelve una lista de diccionarios."""
@@ -134,6 +139,7 @@ def leer_cargas(filename: str) -> List[Dict[str, float]]:
     ws = wb.active
     cargas = []
     for row in ws.iter_rows(min_row=2, values_only=True):
+
         (
             aparato,
             cantidad,
@@ -143,6 +149,7 @@ def leer_cargas(filename: str) -> List[Dict[str, float]]:
             inicio_pm,
             fin_pm,
         ) = row
+
         cargas.append(
             {
                 "aparato": str(aparato),
@@ -152,6 +159,7 @@ def leer_cargas(filename: str) -> List[Dict[str, float]]:
                 "fin_am": float(fin_am),
                 "inicio_pm": float(inicio_pm),
                 "fin_pm": float(fin_pm),
+
             }
         )
     return cargas
@@ -226,6 +234,7 @@ def calcular_necesidades(
 
 
 def elegir_componente(opciones: Dict[str, List[Tuple[str, float]]], categoria: str) -> Tuple[str, float]:
+
     """Elige el componente con menor precio dentro de la categoria."""
 
     candidatos = opciones.get(categoria, [])

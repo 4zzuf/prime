@@ -15,19 +15,21 @@ from Precios import (
     leer_cargas,
     curva_irradiacion_cusco,
     calcular_necesidades,
+
     energia_dia_noche,
+
     calcular_presupuestos,
 )
 
 COSTO_RED = 0.83  # PEN por kWh
 VIDA_UTIL_ANIOS = 20
 
-
 def energia_diaria_kwh(cargas: list[dict[str, float]], curva: Dict[int, float]) -> float:
     """Suma el consumo diario en kWh a partir de los intervalos."""
 
     energia_dia, energia_noche = energia_dia_noche(cargas, curva)
     return (energia_dia + energia_noche) / 1000
+
 
 
 def calcular_amortizacion(
@@ -70,7 +72,6 @@ def graficar_costo_acumulado(costo_sistema: float, daily_kwh: float, nombre: str
     plt.tight_layout()
     plt.savefig(f"costo_{nombre}.png")
     plt.close()
-
 
 def graficar_costo_anual(costo_sistema: float, daily_kwh: float, nombre: str) -> None:
     """Grafica el costo anual de red vs el costo anual amortizado del kit."""
@@ -120,8 +121,7 @@ def graficar_ahorro_largo_plazo(costo_sistema: float, daily_kwh: float, nombre: 
     plt.tight_layout()
     plt.savefig(f"ahorro_{nombre}.png")
     plt.close()
-
-
+    
 def main() -> None:
     if not os.path.exists(FILE):
         crear_excel_de_ejemplo(FILE)
@@ -138,6 +138,7 @@ def main() -> None:
     presupuestos = calcular_presupuestos(datos)
 
     daily_kwh = energia_diaria_kwh(cargas, curva)
+
     print(f"Consumo diario: {daily_kwh:.2f} kWh")
     print(f"Potencia de panel requerida: {potencia_panel:.2f} W")
     print(f"Capacidad de batería requerida: {capacidad_bateria:.2f} Ah")
@@ -152,11 +153,13 @@ def main() -> None:
         print(f"  Ahorro estimado a {VIDA_UTIL_ANIOS} años: {ahorro:.2f} PEN")
         try:
             graficar_costo_acumulado(costo, daily_kwh, categoria)
+
             graficar_costo_anual(costo, daily_kwh, categoria)
             graficar_ahorro_largo_plazo(costo, daily_kwh, categoria)
             print(
                 f"  Graficos guardados: costo_{categoria}.png, costo_anual_{categoria}.png, ahorro_{categoria}.png"
             )
+
         except ImportError as exc:
             print(f"  No se pudo generar grafico: {exc}")
 
