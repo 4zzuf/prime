@@ -139,6 +139,12 @@ def leer_cargas(filename: str) -> List[Dict[str, float]]:
     ws = wb.active
     cargas = []
     for row in ws.iter_rows(min_row=2, values_only=True):
+        if not row:
+            continue
+
+        valores = list(row)
+        if len(valores) < 7:
+            valores.extend([0.0] * (7 - len(valores)))
 
         (
             aparato,
@@ -148,7 +154,7 @@ def leer_cargas(filename: str) -> List[Dict[str, float]]:
             fin_am,
             inicio_pm,
             fin_pm,
-        ) = row
+        ) = valores[:7]
 
         cargas.append(
             {
