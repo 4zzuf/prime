@@ -100,20 +100,39 @@ def crear_excel_cargas_de_ejemplo(filename: str) -> None:
     ws = wb.active
     ws.title = "Cargas"
 
+    # Encabezado en dos filas para coincidir con el formato solicitado
     ws.append([
-        "Aparato",
+        "Nombre del Aparato",
         "Cantidad",
-        "Carga",
-        "HorasDia",
-        "HorasNoche",
+        "Carga (W)",
+        "Uso",
+        "",
     ])
-    ejemplo = [
-        ("Foco LED", 4, 10, 4, 2),
-        ("Laptop", 1, 100, 2, 0),
-        ("Televisor", 1, 80, 0, 3),
+    ws.append(["", "", "", "Horas por día", "Horas noche"])
+
+    datos = [
+        ("Celular", 0, "10 W", "0 hr", "2 hr"),
+        ("Lavadora", 0, "300 W", "2 hr", "1 hr"),
+        ("TV pequeña 32''", 2, "60 W", "2 hr", "3 hr"),
+        ("Licuadora", 1, "400 W", "0.083333333 hr", "0 hr"),
+        ("Calenton electrico", 0, "1000 W", "4 hr", "7 hr"),
+        ("Nevera", 0, "400 W", "6 hr", "6 hr"),
+        ("Refrigerador grande", 0, "250 W", "5 hr", "5 hr"),
+        ("Focos", 5, "5 W", "0 hr", "4 hr"),
+        ("Horno", 0, "200 W", "5 hr", "7 hr"),
+        ("Computadora", 0, "200 W", "3 hr", "3 hr"),
+        ("Ducha electrica", 0, "200 W", "5 hr", "7 hr"),
+        ("Laptop ", 0, "60 W", "2 hr", "3 hr"),
+        ("Radio", 0, "20 W", "2 hr", "5 hr"),
+        ("starlink", 0, "63 W", "10 hr", "10 hr"),
+        ("Camaras", 0, "15 W", "24 hr", "7 hr"),
+        ("Tv grande", 0, "150 W", "3 hr", "3 hr"),
+        ("Refri pequeña", 1, "100 W", "6 hr", "6 hr"),
+        ("Parlante bletooth", 0, "20 W", "1 hr", "7 hr"),
+        ("Radio pequeña", 0, "5 W", "4 hr", "3 hr"),
 
     ]
-    for fila in ejemplo:
+    for fila in datos:
         ws.append(fila)
 
     wb.save(filename)
@@ -159,7 +178,8 @@ def leer_cargas(filename: str) -> List[Dict[str, float]]:
     wb = load_workbook(filename)
     ws = wb.active
     cargas = []
-    for row in ws.iter_rows(min_row=2, values_only=True):
+    # El archivo de ejemplo utiliza dos filas de encabezado
+    for row in ws.iter_rows(min_row=3, values_only=True):
         if not row:
             continue
 
@@ -178,10 +198,10 @@ def leer_cargas(filename: str) -> List[Dict[str, float]]:
         cargas.append(
             {
                 "aparato": str(aparato),
-                "cantidad": float(cantidad),
-                "carga": float(carga),
-                "horas_dia": float(horas_dia),
-                "horas_noche": float(horas_noche),
+                "cantidad": _extraer_numero(str(cantidad)),
+                "carga": _extraer_numero(str(carga)),
+                "horas_dia": _extraer_numero(str(horas_dia)),
+                "horas_noche": _extraer_numero(str(horas_noche)),
 
             }
         )
@@ -282,10 +302,15 @@ def curva_irradiacion_cusco() -> Dict[int, float]:
 
 
 def horas_solares_efectivas(curva: Dict[int, float]) -> float:
-    """Calcula las horas solares equivalentes de la curva."""
+    """Devuelve horas solares pico aproximadas.
 
-    total = sum(curva.values())  # Wh/m^2 suponiendo paso de 1 h
-    return total / 1000
+    Se simplifica a un valor fijo de 5 horas para evitar sobreestimar la
+    generación solar.
+    """
+
+    # Aunque podría calcularse a partir de la curva, se fija en ~5 h para
+    # reflejar condiciones más conservadoras.
+    return 5.0
 
 
 def energia_dia_noche(
@@ -348,18 +373,23 @@ def calcular_kit(
                 mejor_desc = f"{cantidad} x {nombre}"
         resultados[categoria]["Paneles"] = (mejor_desc, mejor_total if mejor_total < math.inf else 0.0)
 
-        # Baterias
+        # Baterias con DoD segun categoria
         mejor_total = math.inf
         mejor_desc = "Sin datos"
+        dod = 0.5 if categoria in ("Barato", "Intermedio") else 0.9
+        capacidad_requerida = capacidad_bateria / dod if dod else capacidad_bateria
         for nombre, capacidad, precio in datos["Baterias"].get(categoria, []):
             if capacidad <= 0:
                 continue
-            cantidad = math.ceil(capacidad_bateria / capacidad)
+            cantidad = math.ceil(capacidad_requerida / capacidad)
             total = cantidad * precio
             if total < mejor_total:
                 mejor_total = total
                 mejor_desc = f"{cantidad} x {nombre}"
-        resultados[categoria]["Baterias"] = (mejor_desc, mejor_total if mejor_total < math.inf else 0.0)
+        resultados[categoria]["Baterias"] = (
+            mejor_desc,
+            mejor_total if mejor_total < math.inf else 0.0,
+        )
 
         # Inversores
         mejor_precio = math.inf
