@@ -100,22 +100,38 @@ def crear_excel_cargas_de_ejemplo(filename: str) -> None:
     ws = wb.active
     ws.title = "Cargas"
 
+    # Encabezado en dos filas para coincidir con el formato solicitado
     ws.append([
-        "Aparato",
+        "Nombre del Aparato",
         "Cantidad",
-        "Carga",
-        "InicioAM",
-        "FinAM",
-        "InicioPM",
-        "FinPM",
+        "Carga (W)",
+        "Uso",
+        "",
     ])
-    ejemplo = [
-        ("Foco LED", 4, 10, 6, 8, 18, 20),
-        ("Laptop", 1, 100, 9, 12, 0, 0),
-        ("Televisor", 1, 80, 0, 0, 19, 22),
+    ws.append(["", "", "", "Horas por día", "Horas noche"])
 
+    datos = [
+        ("Celular", 0, "10 W", "0 hr", "2 hr"),
+        ("Lavadora", 0, "300 W", "2 hr", "1 hr"),
+        ("TV pequeña 32''", 2, "60 W", "2 hr", "3 hr"),
+        ("Licuadora", 1, "400 W", "0.083333333 hr", "0 hr"),
+        ("Calenton electrico", 0, "1000 W", "4 hr", "7 hr"),
+        ("Nevera", 0, "400 W", "6 hr", "6 hr"),
+        ("Refrigerador grande", 0, "250 W", "5 hr", "5 hr"),
+        ("Focos", 5, "5 W", "0 hr", "4 hr"),
+        ("Horno", 0, "200 W", "5 hr", "7 hr"),
+        ("Computadora", 0, "200 W", "3 hr", "3 hr"),
+        ("Ducha electrica", 0, "200 W", "5 hr", "7 hr"),
+        ("Laptop ", 0, "60 W", "2 hr", "3 hr"),
+        ("Radio", 0, "20 W", "2 hr", "5 hr"),
+        ("starlink", 0, "63 W", "10 hr", "10 hr"),
+        ("Camaras", 0, "15 W", "24 hr", "7 hr"),
+        ("Tv grande", 0, "150 W", "3 hr", "3 hr"),
+        ("Refri pequeña", 1, "100 W", "6 hr", "6 hr"),
+        ("Parlante bletooth", 0, "20 W", "1 hr", "7 hr"),
+        ("Radio pequeña", 0, "5 W", "4 hr", "3 hr"),
     ]
-    for fila in ejemplo:
+    for fila in datos:
         ws.append(fila)
 
     wb.save(filename)
@@ -161,33 +177,30 @@ def leer_cargas(filename: str) -> List[Dict[str, float]]:
     wb = load_workbook(filename)
     ws = wb.active
     cargas = []
-    for row in ws.iter_rows(min_row=2, values_only=True):
+    # El archivo de ejemplo utiliza dos filas de encabezado
+    for row in ws.iter_rows(min_row=3, values_only=True):
         if not row:
             continue
 
         valores = list(row)
-        if len(valores) < 7:
-            valores.extend([0.0] * (7 - len(valores)))
+        if len(valores) < 5:
+            valores.extend([0.0] * (5 - len(valores)))
 
         (
             aparato,
             cantidad,
             carga,
-            inicio_am,
-            fin_am,
-            inicio_pm,
-            fin_pm,
-        ) = valores[:7]
+            horas_dia,
+            horas_noche,
+        ) = valores[:5]
 
         cargas.append(
             {
                 "aparato": str(aparato),
-                "cantidad": float(cantidad),
-                "carga": float(carga),
-                "inicio_am": float(inicio_am),
-                "fin_am": float(fin_am),
-                "inicio_pm": float(inicio_pm),
-                "fin_pm": float(fin_pm),
+                "cantidad": _extraer_numero(str(cantidad)),
+                "carga": _extraer_numero(str(carga)),
+                "horas_dia": _extraer_numero(str(horas_dia)),
+                "horas_noche": _extraer_numero(str(horas_noche)),
 
             }
         )
@@ -213,13 +226,12 @@ def seleccionar_cargas_gui(cargas: List[Dict[str, float]]) -> List[Dict[str, flo
         "Aparato",
         "Cantidad",
         "Carga(W)",
-        "InicioAM",
-        "FinAM",
-        "InicioPM",
-        "FinPM",
+        "HorasDia",
+        "HorasNoche",
     ]
     table = QtWidgets.QTableWidget(len(cargas), len(headers))
     table.setHorizontalHeaderLabels(headers)
+    dialog.resize(800, 600)
 
     for row, carga in enumerate(cargas):
         chk_item = QtWidgets.QTableWidgetItem()
@@ -228,10 +240,8 @@ def seleccionar_cargas_gui(cargas: List[Dict[str, float]]) -> List[Dict[str, flo
         table.setItem(row, 1, QtWidgets.QTableWidgetItem(carga["aparato"]))
         table.setItem(row, 2, QtWidgets.QTableWidgetItem(str(carga["cantidad"])))
         table.setItem(row, 3, QtWidgets.QTableWidgetItem(str(carga["carga"])))
-        table.setItem(row, 4, QtWidgets.QTableWidgetItem(str(carga["inicio_am"])))
-        table.setItem(row, 5, QtWidgets.QTableWidgetItem(str(carga["fin_am"])))
-        table.setItem(row, 6, QtWidgets.QTableWidgetItem(str(carga["inicio_pm"])))
-        table.setItem(row, 7, QtWidgets.QTableWidgetItem(str(carga["fin_pm"])))
+        table.setItem(row, 4, QtWidgets.QTableWidgetItem(str(carga["horas_dia"])))
+        table.setItem(row, 5, QtWidgets.QTableWidgetItem(str(carga["horas_noche"])))
 
     layout.addWidget(table)
     boton = QtWidgets.QPushButton("Calcular")
@@ -247,19 +257,15 @@ def seleccionar_cargas_gui(cargas: List[Dict[str, float]]) -> List[Dict[str, flo
             aparato = table.item(row, 1).text()
             cantidad = float(table.item(row, 2).text() or 0)
             carga_w = float(table.item(row, 3).text() or 0)
-            inicio_am = float(table.item(row, 4).text() or 0)
-            fin_am = float(table.item(row, 5).text() or 0)
-            inicio_pm = float(table.item(row, 6).text() or 0)
-            fin_pm = float(table.item(row, 7).text() or 0)
+            horas_dia = float(table.item(row, 4).text() or 0)
+            horas_noche = float(table.item(row, 5).text() or 0)
             resultado.append(
                 {
                     "aparato": aparato,
                     "cantidad": cantidad,
                     "carga": carga_w,
-                    "inicio_am": inicio_am,
-                    "fin_am": fin_am,
-                    "inicio_pm": inicio_pm,
-                    "fin_pm": fin_pm,
+                    "horas_dia": horas_dia,
+                    "horas_noche": horas_noche,
                 }
             )
         dialog.accept()
@@ -295,33 +301,29 @@ def curva_irradiacion_cusco() -> Dict[int, float]:
 
 
 def horas_solares_efectivas(curva: Dict[int, float]) -> float:
-    """Calcula las horas solares equivalentes de la curva."""
+    """Devuelve horas solares pico aproximadas.
 
-    total = sum(curva.values())  # Wh/m^2 suponiendo paso de 1 h
-    return total / 1000
+    Se simplifica a un valor fijo de 5 horas para evitar sobreestimar la
+    generación solar.
+    """
+
+    # Aunque podría calcularse a partir de la curva, se fija en ~5 h para
+    # reflejar condiciones más conservadoras.
+    return 5.0
 
 
 def energia_dia_noche(
     cargas: List[Dict[str, float]], curva: Dict[int, float]
 ) -> Tuple[float, float]:
-    """Separa la energia de las cargas en horas con y sin sol."""
+    """Calcula energia consumida de dia y de noche."""
 
     energia_dia = 0.0
     energia_noche = 0.0
 
     for carga in cargas:
         potencia = carga["carga"] * carga["cantidad"]
-        for inicio, fin in [
-            (carga["inicio_am"], carga["fin_am"]),
-            (carga["inicio_pm"], carga["fin_pm"]),
-        ]:
-            if fin <= inicio:
-                continue
-            for hora in range(int(inicio), int(fin)):
-                if curva.get(hora, 0) > 0:
-                    energia_dia += potencia
-                else:
-                    energia_noche += potencia
+        energia_dia += potencia * carga.get("horas_dia", 0)
+        energia_noche += potencia * carga.get("horas_noche", 0)
 
     return energia_dia, energia_noche
 
@@ -341,16 +343,7 @@ def calcular_necesidades(
 def potencia_maxima_demanda(cargas: List[Dict[str, float]]) -> float:
     """Calcula la potencia simultanea maxima de las cargas."""
 
-    demanda_por_hora = {h: 0.0 for h in range(24)}
-    for carga in cargas:
-        potencia = carga["carga"] * carga["cantidad"]
-        for inicio, fin in [
-            (carga["inicio_am"], carga["fin_am"]),
-            (carga["inicio_pm"], carga["fin_pm"]),
-        ]:
-            for hora in range(int(inicio), int(fin)):
-                demanda_por_hora[hora] += potencia
-    return max(demanda_por_hora.values())
+    return sum(carga["carga"] * carga["cantidad"] for carga in cargas)
 
 
 def calcular_kit(
@@ -379,18 +372,23 @@ def calcular_kit(
                 mejor_desc = f"{cantidad} x {nombre}"
         resultados[categoria]["Paneles"] = (mejor_desc, mejor_total if mejor_total < math.inf else 0.0)
 
-        # Baterias
+        # Baterias con DoD segun categoria
         mejor_total = math.inf
         mejor_desc = "Sin datos"
+        dod = 0.5 if categoria in ("Barato", "Intermedio") else 0.9
+        capacidad_requerida = capacidad_bateria / dod if dod else capacidad_bateria
         for nombre, capacidad, precio in datos["Baterias"].get(categoria, []):
             if capacidad <= 0:
                 continue
-            cantidad = math.ceil(capacidad_bateria / capacidad)
+            cantidad = math.ceil(capacidad_requerida / capacidad)
             total = cantidad * precio
             if total < mejor_total:
                 mejor_total = total
                 mejor_desc = f"{cantidad} x {nombre}"
-        resultados[categoria]["Baterias"] = (mejor_desc, mejor_total if mejor_total < math.inf else 0.0)
+        resultados[categoria]["Baterias"] = (
+            mejor_desc,
+            mejor_total if mejor_total < math.inf else 0.0,
+        )
 
         # Inversores
         mejor_precio = math.inf
