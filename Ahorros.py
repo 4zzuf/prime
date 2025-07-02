@@ -152,8 +152,7 @@ def main() -> None:
     headers = ["Usar", "Aparato", "Cantidad", "Carga(W)", "HorasDia", "HorasNoche"]
     tabla = QtWidgets.QTableWidget(len(cargas_base), len(headers))
     tabla.setHorizontalHeaderLabels(headers)
-    ventana.resize(900, 600)
-
+    ventana.resize(1100, 700)
     for fila, carga in enumerate(cargas_base):
         chk = QtWidgets.QTableWidgetItem()
         chk.setCheckState(QtCore.Qt.Checked)
@@ -175,14 +174,12 @@ def main() -> None:
     layout_der = QtWidgets.QVBoxLayout()
     btn_ejecutar = QtWidgets.QPushButton("Ejecutar simulacion")
     layout_der.addWidget(btn_ejecutar)
-    
     btn_costo = QtWidgets.QPushButton("Costo acumulado")
     btn_anual = QtWidgets.QPushButton("Costo anual")
     btn_ahorro = QtWidgets.QPushButton("Ahorro")
     btn_sistemas = QtWidgets.QPushButton("Sistemas")
     for b in (btn_costo, btn_anual, btn_ahorro, btn_sistemas):
         b.setEnabled(False)
-
         layout_der.addWidget(b)
 
     salida = QtWidgets.QTextEdit()
@@ -224,7 +221,6 @@ def main() -> None:
                     "horas_dia": horas_dia,
                     "horas_noche": horas_noche,
                 }
-
             )
 
         curva = curva_irradiacion_cusco()
@@ -232,11 +228,14 @@ def main() -> None:
         demanda_max = potencia_maxima_demanda(cargas)
         resultados = calcular_kit(datos, pot_panel, cap_bat, demanda_max)
         daily_kwh = energia_diaria_kwh(cargas, curva)
-
+        cap_gel = cap_bat / 0.5
+        cap_li = cap_bat / 0.9
         texto = (
             f"Consumo diario: {daily_kwh:.2f} kWh\n"
             f"Potencia de panel requerida: {pot_panel:.2f} W\n"
-            f"Capacidad de bateria requerida: {cap_bat:.2f} Ah"
+            "Capacidad de bateria requerida:\n"
+            f"  Si es de Gel/Agm : {cap_gel:.2f} Ah\n"
+            f"  Si es de litio: {cap_li:.2f} Ah"
         )
         salida.setPlainText(texto)
 
@@ -254,6 +253,7 @@ def main() -> None:
 
     def mostrar_imagen(ruta: str) -> None:
         dlg = QtWidgets.QDialog(ventana)
+        dlg.resize(600, 400)
         lbl = QtWidgets.QLabel()
         pix = QtGui.QPixmap(ruta)
         lbl.setPixmap(pix)
@@ -262,29 +262,25 @@ def main() -> None:
         dlg.exec_()
 
     def mostrar_sistemas() -> None:
-        colores = {
-            "Barato": "#d9534f",
-            "Intermedio": "#f0ad4e",
-            "Premium": "#5cb85c",
-        }
         html = ""
         for cat in CATEGORIES:
             pres = resultados.get(cat, {})
             if not pres:
                 continue
             costo, costo_kwh, payback, ahorro = calcular_amortizacion(pres, daily_kwh)
-            color = colores.get(cat, "black")
-            html += f"<h3 style='color:{color}'>{cat}: {costo:.2f} PEN</h3><ul>"
+            html += f"<h3>{cat}</h3>"
+            html += "<table border='1' cellspacing='0' cellpadding='2'>"
             for comp, (desc, precio) in pres.items():
-                html += f"<li><b>{comp}</b>: {desc} - {precio:.2f} PEN</li>"
-            html += (
-                f"</ul><p>Costo kWh: {costo_kwh:.2f} PEN<br>"
-                f"Payback: {payback:.2f} años<br>"
-                f"Ahorro {VIDA_UTIL_ANIOS} años: {ahorro:.2f} PEN</p>"
-            )
+                html += f"<tr><td>{comp}</td><td>{desc}</td><td>{precio:.2f} PEN</td></tr>"
+            html += f"<tr><td colspan='2'><b>Total</b></td><td>{costo:.2f} PEN</td></tr>"
+            html += f"<tr><td colspan='2'>Costo kWh</td><td>{costo_kwh:.2f} PEN</td></tr>"
+            html += f"<tr><td colspan='2'>Payback</td><td>{payback:.2f} años</td></tr>"
+            html += f"<tr><td colspan='2'>Ahorro {VIDA_UTIL_ANIOS} años</td><td>{ahorro:.2f} PEN</td></tr>"
+            html += "</table><br>"
 
         dlg = QtWidgets.QDialog(ventana)
         dlg.setWindowTitle("Sistemas recomendados")
+        dlg.resize(700, 500)
         lay = QtWidgets.QVBoxLayout(dlg)
         txt = QtWidgets.QTextBrowser()
         txt.setHtml(html)
@@ -292,7 +288,6 @@ def main() -> None:
         dlg.exec_()
 
     btn_toggle.clicked.connect(toggle_checks)
-
     btn_ejecutar.clicked.connect(ejecutar)
     btn_costo.clicked.connect(lambda: mostrar_imagen("costo_resultado.png"))
     btn_anual.clicked.connect(lambda: mostrar_imagen("costo_anual_resultado.png"))

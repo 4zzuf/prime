@@ -52,19 +52,16 @@ def crear_excel_de_ejemplo(filename: str) -> None:
             ("Premium", "Hibrido3000", "Híbrido 3000W", 700),
         ],
         "Baterias": [
-            ("Barato", "AGM7", "AGM 7Ah", 40),
-            ("Barato", "AGM26", "AGM 26Ah", 70),
-            ("Barato", "AGM40", "AGM 40Ah", 100),
-            ("Barato", "AGM75", "AGM 75Ah", 150),
-            ("Intermedio", "Gel100", "Gel 100Ah", 250),
-            ("Intermedio", "Gel150", "Gel 150Ah", 320),
-            ("Intermedio", "Gel200", "Gel 200Ah", 400),
-            ("Intermedio", "Gel300", "Gel 300Ah", 600),
-            ("Premium", "Li100", "Litio 100Ah", 800),
-            ("Premium", "Li200", "Litio 200Ah", 1400),
-            ("Barato", "AGM60", "AGM 60Ah", 160),
-            ("Intermedio", "Gel100", "Gel 100Ah", 240),
-            ("Premium", "Li200", "Litio 200Ah", 400),
+            ("Barato", "AGM7", "AGM 7Ah", 12, 40),
+            ("Barato", "AGM26", "AGM 26Ah", 12, 70),
+            ("Barato", "AGM40", "AGM 40Ah", 12, 100),
+            ("Barato", "AGM75", "AGM 75Ah", 12, 150),
+            ("Intermedio", "Gel100", "Gel 100Ah", 12, 250),
+            ("Intermedio", "Gel150", "Gel 150Ah", 12, 320),
+            ("Intermedio", "Gel200", "Gel 200Ah", 24, 400),
+            ("Intermedio", "Gel300", "Gel 300Ah", 48, 600),
+            ("Premium", "Li100", "Litio 100Ah", 12, 800),
+            ("Premium", "Li200", "Litio 200Ah", 24, 1400),
         ],
         "Controladores": [
             ("Barato", "PWM10", "PWM 10A", 30),
@@ -81,8 +78,10 @@ def crear_excel_de_ejemplo(filename: str) -> None:
 
     for nombre, filas in datos.items():
         ws = wb.create_sheet(title=nombre)
-
-        ws.append(["Categoria", "Marca", "Detalle", "Precio"])
+        if nombre == "Baterias":
+            ws.append(["Categoria", "Marca", "Detalle", "Voltaje", "Precio"])
+        else:
+            ws.append(["Categoria", "Marca", "Detalle", "Precio"])
 
         for fila in filas:
             ws.append(fila)
@@ -153,19 +152,31 @@ def leer_datos(filename: str) -> Dict[str, Dict[str, List[Tuple[str, float, floa
         raise ImportError("openpyxl no esta instalado")
 
     wb = load_workbook(filename)
-    datos: Dict[str, Dict[str, List[Tuple[str, float, float]]]] = {}
+    datos: Dict[str, Dict[str, List[Tuple]]] = {}
     for hoja in SHEETS:
         ws = wb[hoja]
         datos[hoja] = {cat: [] for cat in CATEGORIES}
 
         for row in ws.iter_rows(min_row=2, values_only=True):
-            if len(row) < 4:
-                continue
-            categoria, marca, detalle, precio = row
-            if categoria in CATEGORIES:
+            if hoja == "Baterias":
+                if len(row) < 5:
+                    continue
+                categoria, marca, detalle, volt, precio = row[:5]
+                if categoria not in CATEGORIES:
+                    continue
                 nombre = f"{marca} {detalle}"
                 capacidad = _extraer_numero(str(detalle))
-                datos[hoja][categoria].append((nombre, capacidad, float(precio)))
+                datos[hoja][categoria].append(
+                    (nombre, capacidad, float(volt), float(precio))
+                )
+            else:
+                if len(row) < 4:
+                    continue
+                categoria, marca, detalle, precio = row
+                if categoria in CATEGORIES:
+                    nombre = f"{marca} {detalle}"
+                    capacidad = _extraer_numero(str(detalle))
+                    datos[hoja][categoria].append((nombre, capacidad, float(precio)))
     return datos
 
 def leer_cargas(filename: str) -> List[Dict[str, float]]:
@@ -231,8 +242,7 @@ def seleccionar_cargas_gui(cargas: List[Dict[str, float]]) -> List[Dict[str, flo
     ]
     table = QtWidgets.QTableWidget(len(cargas), len(headers))
     table.setHorizontalHeaderLabels(headers)
-    dialog.resize(800, 600)
-
+    dialog.resize(1100, 700)
     for row, carga in enumerate(cargas):
         chk_item = QtWidgets.QTableWidgetItem()
         chk_item.setCheckState(QtCore.Qt.Checked)
@@ -302,11 +312,9 @@ def curva_irradiacion_cusco() -> Dict[int, float]:
 
 def horas_solares_efectivas(curva: Dict[int, float]) -> float:
     """Devuelve horas solares pico aproximadas.
-
     Se simplifica a un valor fijo de 5 horas para evitar sobreestimar la
     generación solar.
     """
-
     # Aunque podría calcularse a partir de la curva, se fija en ~5 h para
     # reflejar condiciones más conservadoras.
     return 5.0
@@ -347,7 +355,7 @@ def potencia_maxima_demanda(cargas: List[Dict[str, float]]) -> float:
 
 
 def calcular_kit(
-    datos: Dict[str, Dict[str, List[Tuple[str, float, float]]]],
+    datos: Dict[str, Dict[str, List[Tuple]]],
     potencia_panel: float,
     capacidad_bateria: float,
     demanda_maxima: float,
@@ -357,6 +365,15 @@ def calcular_kit(
     resultados: Dict[str, Dict[str, Tuple[str, float]]] = {
         cat: {} for cat in CATEGORIES
     }
+
+    if potencia_panel <= 1500:
+        volt_sistema = 12
+    elif potencia_panel <= 5000:
+        volt_sistema = 24
+    else:
+        volt_sistema = 48
+
+    energia_noche_kwh = capacidad_bateria * 12 / 1000
 
     for categoria in CATEGORIES:
         # Paneles
@@ -372,19 +389,23 @@ def calcular_kit(
                 mejor_desc = f"{cantidad} x {nombre}"
         resultados[categoria]["Paneles"] = (mejor_desc, mejor_total if mejor_total < math.inf else 0.0)
 
-        # Baterias con DoD segun categoria
+        # Baterias considerando DoD y voltaje de sistema
         mejor_total = math.inf
         mejor_desc = "Sin datos"
         dod = 0.5 if categoria in ("Barato", "Intermedio") else 0.9
-        capacidad_requerida = capacidad_bateria / dod if dod else capacidad_bateria
-        for nombre, capacidad, precio in datos["Baterias"].get(categoria, []):
-            if capacidad <= 0:
+        ah_sistema = energia_noche_kwh * 1000 / volt_sistema
+        capacidad_requerida = ah_sistema / dod if dod else ah_sistema
+        for nombre, capacidad, volt, precio in datos["Baterias"].get(categoria, []):
+            if capacidad <= 0 or volt_sistema % volt != 0:
                 continue
-            cantidad = math.ceil(capacidad_requerida / capacidad)
-            total = cantidad * precio
+            en_serie = int(volt_sistema / volt)
+            en_paralelo = math.ceil(capacidad_requerida / capacidad)
+            total_bat = en_serie * en_paralelo
+            total = total_bat * precio
+            desc = f"{total_bat} x {nombre} ({en_serie}S{en_paralelo}P)"
             if total < mejor_total:
                 mejor_total = total
-                mejor_desc = f"{cantidad} x {nombre}"
+                mejor_desc = desc
         resultados[categoria]["Baterias"] = (
             mejor_desc,
             mejor_total if mejor_total < math.inf else 0.0,
