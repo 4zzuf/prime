@@ -146,6 +146,7 @@ def main() -> None:
     app = QtWidgets.QApplication([])
     ventana = QtWidgets.QWidget()
     ventana.setWindowTitle("Simulador Solar")
+
     layout_principal = QtWidgets.QHBoxLayout(ventana)
 
     headers = ["Usar", "Aparato", "Cantidad", "Carga(W)", "HorasDia", "HorasNoche"]
@@ -174,13 +175,14 @@ def main() -> None:
     layout_der = QtWidgets.QVBoxLayout()
     btn_ejecutar = QtWidgets.QPushButton("Ejecutar simulacion")
     layout_der.addWidget(btn_ejecutar)
-
+    
     btn_costo = QtWidgets.QPushButton("Costo acumulado")
     btn_anual = QtWidgets.QPushButton("Costo anual")
     btn_ahorro = QtWidgets.QPushButton("Ahorro")
     btn_sistemas = QtWidgets.QPushButton("Sistemas")
     for b in (btn_costo, btn_anual, btn_ahorro, btn_sistemas):
         b.setEnabled(False)
+
         layout_der.addWidget(b)
 
     salida = QtWidgets.QTextEdit()
@@ -222,6 +224,7 @@ def main() -> None:
                     "horas_dia": horas_dia,
                     "horas_noche": horas_noche,
                 }
+
             )
 
         curva = curva_irradiacion_cusco()
@@ -289,6 +292,7 @@ def main() -> None:
         dlg.exec_()
 
     btn_toggle.clicked.connect(toggle_checks)
+
     btn_ejecutar.clicked.connect(ejecutar)
     btn_costo.clicked.connect(lambda: mostrar_imagen("costo_resultado.png"))
     btn_anual.clicked.connect(lambda: mostrar_imagen("costo_anual_resultado.png"))
