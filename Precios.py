@@ -322,7 +322,6 @@ def seleccionar_cargas_gui(cargas: List[Dict[str, float]]) -> List[Dict[str, flo
     table = QtWidgets.QTableWidget(len(cargas), len(headers))
     table.setHorizontalHeaderLabels(headers)
     dialog.resize(1100, 700)
-
     for row, carga in enumerate(cargas):
         chk_item = QtWidgets.QTableWidgetItem()
         chk_item.setCheckState(QtCore.Qt.Checked)
@@ -392,11 +391,9 @@ def curva_irradiacion_cusco() -> Dict[int, float]:
 
 def horas_solares_efectivas(curva: Dict[int, float]) -> float:
     """Devuelve horas solares pico aproximadas.
-
     Se simplifica a un valor fijo de 5 horas para evitar sobreestimar la
     generación solar.
     """
-
     # Aunque podría calcularse a partir de la curva, se fija en ~5 h para
     # reflejar condiciones más conservadoras.
     return 5.0

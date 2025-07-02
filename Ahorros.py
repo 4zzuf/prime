@@ -166,7 +166,6 @@ def main() -> None:
     tabla.setHorizontalHeaderLabels(headers)
     tabla.setStyleSheet("background-color:#e8f4ff;")
     ventana.resize(1300, 800)
-
     for fila, carga in enumerate(cargas_base):
         chk = QtWidgets.QTableWidgetItem()
         chk.setCheckState(QtCore.Qt.Checked)
@@ -188,7 +187,6 @@ def main() -> None:
     layout_der = QtWidgets.QVBoxLayout()
     btn_ejecutar = QtWidgets.QPushButton("Ejecutar simulacion")
     layout_der.addWidget(btn_ejecutar)
-
     btn_costo = QtWidgets.QPushButton("Costo acumulado")
     btn_anual = QtWidgets.QPushButton("Costo anual")
     btn_ahorro = QtWidgets.QPushButton("Ahorro")
@@ -209,7 +207,6 @@ def main() -> None:
 
     layout_der.addStretch(1)
     layout_principal.addLayout(layout_der)
-
     def parse_item(desc: str) -> Tuple[str, int]:
         m = re.match(r"(\d+)\s*x\s*([^()]+)", desc)
         if m:
@@ -219,7 +216,6 @@ def main() -> None:
             qty = 1
             name = desc.split("(")[0].strip()
         return name, qty
-
     def toggle_checks() -> None:
         """Marca o desmarca todas las cargas."""
         any_unchecked = any(
@@ -325,7 +321,6 @@ def main() -> None:
                 item = tabla.item(r, c)
                 if item is not None:
                     tabla.closePersistentEditor(item)
-
         for row in range(tabla.rowCount()):
             if tabla.item(row, 0).checkState() != QtCore.Qt.Checked:
                 continue
@@ -349,7 +344,6 @@ def main() -> None:
         demanda_max = potencia_maxima_demanda(cargas)
         resultados = calcular_kit(datos, pot_panel, cap_bat, demanda_max)
         daily_kwh = energia_diaria_kwh(cargas, curva)
-
         cap_gel = cap_bat / 0.5
         cap_li = cap_bat / 0.9
         texto = (
@@ -390,7 +384,6 @@ def main() -> None:
         lay = QtWidgets.QVBoxLayout(dlg)
 
         colores = {"Barato": "#dff0d8", "Intermedio": "#fff3cd", "Premium": "#f8d7da"}
-
         for cat in CATEGORIES:
             pres = resultados.get(cat, {})
             if not pres:
@@ -421,7 +414,6 @@ def main() -> None:
             botones.addWidget(btn_v)
             botones.addWidget(btn_vi)
             lay.addLayout(botones)
-
         dlg.exec_()
 
     btn_toggle.clicked.connect(toggle_checks)
