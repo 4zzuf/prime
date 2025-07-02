@@ -194,6 +194,82 @@ def leer_cargas(filename: str) -> List[Dict[str, float]]:
     return cargas
 
 
+def seleccionar_cargas_gui(cargas: List[Dict[str, float]]) -> List[Dict[str, float]]:
+    """Muestra una ventana (PyQt5) para elegir y editar las cargas."""
+
+    try:
+        from PyQt5 import QtCore, QtWidgets
+    except Exception as exc:  # pragma: no cover - dependencias ausentes
+        print(f"No se pudo abrir la interfaz grafica: {exc}")
+        return cargas
+
+    app = QtWidgets.QApplication([])
+    dialog = QtWidgets.QDialog()
+    dialog.setWindowTitle("Seleccionar cargas")
+    layout = QtWidgets.QVBoxLayout(dialog)
+
+    headers = [
+        "Usar",
+        "Aparato",
+        "Cantidad",
+        "Carga(W)",
+        "InicioAM",
+        "FinAM",
+        "InicioPM",
+        "FinPM",
+    ]
+    table = QtWidgets.QTableWidget(len(cargas), len(headers))
+    table.setHorizontalHeaderLabels(headers)
+
+    for row, carga in enumerate(cargas):
+        chk_item = QtWidgets.QTableWidgetItem()
+        chk_item.setCheckState(QtCore.Qt.Checked)
+        table.setItem(row, 0, chk_item)
+        table.setItem(row, 1, QtWidgets.QTableWidgetItem(carga["aparato"]))
+        table.setItem(row, 2, QtWidgets.QTableWidgetItem(str(carga["cantidad"])))
+        table.setItem(row, 3, QtWidgets.QTableWidgetItem(str(carga["carga"])))
+        table.setItem(row, 4, QtWidgets.QTableWidgetItem(str(carga["inicio_am"])))
+        table.setItem(row, 5, QtWidgets.QTableWidgetItem(str(carga["fin_am"])))
+        table.setItem(row, 6, QtWidgets.QTableWidgetItem(str(carga["inicio_pm"])))
+        table.setItem(row, 7, QtWidgets.QTableWidgetItem(str(carga["fin_pm"])))
+
+    layout.addWidget(table)
+    boton = QtWidgets.QPushButton("Calcular")
+    layout.addWidget(boton)
+
+    resultado: List[Dict[str, float]] = []
+
+    def finalizar() -> None:
+        for row in range(table.rowCount()):
+            item_usar = table.item(row, 0)
+            if item_usar.checkState() != QtCore.Qt.Checked:
+                continue
+            aparato = table.item(row, 1).text()
+            cantidad = float(table.item(row, 2).text() or 0)
+            carga_w = float(table.item(row, 3).text() or 0)
+            inicio_am = float(table.item(row, 4).text() or 0)
+            fin_am = float(table.item(row, 5).text() or 0)
+            inicio_pm = float(table.item(row, 6).text() or 0)
+            fin_pm = float(table.item(row, 7).text() or 0)
+            resultado.append(
+                {
+                    "aparato": aparato,
+                    "cantidad": cantidad,
+                    "carga": carga_w,
+                    "inicio_am": inicio_am,
+                    "fin_am": fin_am,
+                    "inicio_pm": inicio_pm,
+                    "fin_pm": fin_pm,
+                }
+            )
+        dialog.accept()
+
+    boton.clicked.connect(finalizar)
+    dialog.exec_()
+    app.quit()
+    return resultado or cargas
+
+
 def curva_irradiacion_cusco() -> Dict[int, float]:
     """Devuelve una curva horaria de irradiación típica de Cusco."""
 

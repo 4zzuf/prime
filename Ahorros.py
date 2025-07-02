@@ -18,6 +18,8 @@ from Precios import (
     energia_dia_noche,
     potencia_maxima_demanda,
     calcular_kit,
+    seleccionar_cargas_gui,
+
 )
 
 COSTO_RED = 0.83  # PEN por kWh
@@ -132,6 +134,7 @@ def main() -> None:
 
     datos = leer_datos(FILE)
     cargas = leer_cargas(LOADS_FILE)
+    cargas = seleccionar_cargas_gui(cargas)
     curva = curva_irradiacion_cusco()
     potencia_panel, capacidad_bateria = calcular_necesidades(cargas, curva)
     demanda_maxima = potencia_maxima_demanda(cargas)
