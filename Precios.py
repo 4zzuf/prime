@@ -1,3 +1,4 @@
+
 """Calcula presupuestos para sistemas fotovoltaicos leyendo precios desde un
 archivo de Excel."""
 
@@ -129,4 +130,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
